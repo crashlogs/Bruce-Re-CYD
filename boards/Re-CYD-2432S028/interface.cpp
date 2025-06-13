@@ -78,10 +78,10 @@ void _post_setup_gpio() {
 #endif
 
     // Brightness control must be initialized after tft in this case @Pirata
-    pinMode(TFT_BL, OUTPUT);
+/*    pinMode(TFT_BL, OUTPUT);
     ledcSetup(TFT_BRIGHT_CHANNEL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits); // Channel 0, 10khz, 8bits
     ledcAttachPin(TFT_BL, TFT_BRIGHT_CHANNEL);
-    ledcWrite(TFT_BRIGHT_CHANNEL, 255);
+    ledcWrite(TFT_BRIGHT_CHANNEL, 255);*/
 }
 
 /*********************************************************************
@@ -89,7 +89,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-void _setBrightness(uint8_t brightval) {
+/*void _setBrightness(uint8_t brightval) {
     int dutyCycle;
     if (brightval == 100) dutyCycle = 255;
     else if (brightval == 75) dutyCycle = 130;
@@ -100,7 +100,7 @@ void _setBrightness(uint8_t brightval) {
 
     log_i("dutyCycle for bright 0-255: %d", dutyCycle);
     ledcWrite(TFT_BRIGHT_CHANNEL, dutyCycle); // Channel 0
-}
+}*/
 
 /*********************************************************************
 ** Function: InputHandler
