@@ -54,4 +54,6 @@
 #include "../ESP32-C5/pins_arduino.h"
 #elif NM_CYD_ESP32C5
 #include "../nm-cyd-c5/pins_arduino.h"
+#elif RE_CYD_2432S028
+#include "../Re-CYD-2432S028/pins_arduino.h"
 #endif
