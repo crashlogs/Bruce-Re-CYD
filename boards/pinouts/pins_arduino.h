@@ -34,4 +34,6 @@
 #include "../marauder-touch/pins_arduino.h"
 #elif MARAUDER_MINI
 #include "../marauder-mini/pins_arduino.h"
+#elif RE_CYD_2432S028
+#include "../Re-CYD-2432S028/pins_arduino.h"
 #endif
