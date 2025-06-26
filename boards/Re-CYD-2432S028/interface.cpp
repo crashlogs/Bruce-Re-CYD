@@ -76,12 +76,12 @@ void _post_setup_gpio() {
     }
     tft.setTouch(calData);
 #endif
-
+    // Brightness disabled for RE:CYD
     // Brightness control must be initialized after tft in this case @Pirata
-/*    pinMode(TFT_BL, OUTPUT);
-    ledcSetup(TFT_BRIGHT_CHANNEL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits); // Channel 0, 10khz, 8bits
-    ledcAttachPin(TFT_BL, TFT_BRIGHT_CHANNEL);
-    ledcWrite(TFT_BRIGHT_CHANNEL, 255);*/
+    /*    pinMode(TFT_BL, OUTPUT);
+        ledcSetup(TFT_BRIGHT_CHANNEL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits); // Channel 0, 10khz, 8bits
+        ledcAttachPin(TFT_BL, TFT_BRIGHT_CHANNEL);
+        ledcWrite(TFT_BRIGHT_CHANNEL, 255);*/
 }
 
 /*********************************************************************
