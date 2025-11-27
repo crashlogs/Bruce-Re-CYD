@@ -33,6 +33,25 @@ void _setup_gpio() {
     pinMode(XPT2046_CS, OUTPUT);
     digitalWrite(XPT2046_CS, HIGH);
 #endif
+    // INIT-01 FOR SHARED SPI BUS
+    pinMode(SDCARD_CS, OUTPUT);
+    digitalWrite(SDCARD_CS, HIGH);
+#ifdef TFT_CS
+    pinMode(TFT_CS, OUTPUT);
+    digitalWrite(TFT_CS, HIGH);
+#endif
+#ifdef SPI_SS_PIN
+    pinMode(SPI_SS_PIN, OUTPUT);
+    digitalWrite(SPI_SS_PIN, HIGH);
+#endif
+#ifdef CC1101_SS_PIN
+    pinMode(CC1101_SS_PIN, OUTPUT);
+    digitalWrite(CC1101_SS_PIN, HIGH);
+#endif
+#ifdef NRF24_SS_PIN
+    pinMode(NRF24_SS_PIN, OUTPUT);
+    digitalWrite(NRF24_SS_PIN, HIGH);
+#endif
 
 #if !defined(USE_TFT_eSPI_TOUCH) // Use libraries
     if (!touch.begin()) {
