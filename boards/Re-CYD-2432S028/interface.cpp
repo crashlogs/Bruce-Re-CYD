@@ -4,10 +4,19 @@
 #include <interface.h>
 
 #if defined(HAS_CAPACITIVE_TOUCH)
+#if defined(TOUCH_GT911_I2C)
+#include "TouchDrvGT911.hpp"
+TouchDrvGT911 touch;
+struct TouchPointPro {
+    int16_t x = 0;
+    int16_t y = 0;
+};
+#else
 #include "CYD28_TouchscreenC.h"
 #define CYD28_DISPLAY_HOR_RES_MAX 240
 #define CYD28_DISPLAY_VER_RES_MAX 320
 CYD28_TouchC touch(CYD28_DISPLAY_HOR_RES_MAX, CYD28_DISPLAY_VER_RES_MAX);
+#endif
 #elif defined(USE_TFT_eSPI_TOUCH)
 #define XPT2046_CS TOUCH_CS
 #else
@@ -33,32 +42,57 @@ void _setup_gpio() {
     pinMode(XPT2046_CS, OUTPUT);
     digitalWrite(XPT2046_CS, HIGH);
 #endif
-    // INIT-01 FOR SHARED SPI BUS
-    pinMode(SDCARD_CS, OUTPUT);
-    digitalWrite(SDCARD_CS, HIGH);
-#ifdef TFT_CS
-    pinMode(TFT_CS, OUTPUT);
-    digitalWrite(TFT_CS, HIGH);
-#endif
-#ifdef SPI_SS_PIN
-    pinMode(SPI_SS_PIN, OUTPUT);
-    digitalWrite(SPI_SS_PIN, HIGH);
-#endif
+
+// --- 1. Prevent SPI Bus Conflicts on Boot ---
+// Ensure SPI CS pins start HIGH so modules don't talk over each other
 #ifdef CC1101_SS_PIN
     pinMode(CC1101_SS_PIN, OUTPUT);
     digitalWrite(CC1101_SS_PIN, HIGH);
 #endif
+
 #ifdef NRF24_SS_PIN
     pinMode(NRF24_SS_PIN, OUTPUT);
     digitalWrite(NRF24_SS_PIN, HIGH);
 #endif
 
+#ifdef SDCARD_CS
+    pinMode(SDCARD_CS, OUTPUT);
+    digitalWrite(SDCARD_CS, HIGH);
+#endif
+
+    // PN532 Chip Select on GPIO 27
+    pinMode(SPI_SS_PIN, OUTPUT);
+    digitalWrite(SPI_SS_PIN, HIGH);
+
+    // --- 2. Register RFID & RF Modules in Bruce Core ---
+    bruceConfigPins.rfidModule = PN532_SPI_MODULE;
+    bruceConfigPins.PN532_bus.sck = (gpio_num_t)SPI_SCK_PIN;
+    bruceConfigPins.PN532_bus.miso = (gpio_num_t)SPI_MISO_PIN;
+    bruceConfigPins.PN532_bus.mosi = (gpio_num_t)SPI_MOSI_PIN;
+    bruceConfigPins.PN532_bus.cs = (gpio_num_t)SPI_SS_PIN;
+#ifdef CC1101_SS_PIN
+    bruceConfigPins.rfModule = CC1101_SPI_MODULE;
+    bruceConfigPins.CC1101_bus.cs = (gpio_num_t)CC1101_SS_PIN;
+    bruceConfigPins.CC1101_bus.io0 = (gpio_num_t)CC1101_GDO0_PIN;
+#endif
+
+    // --- Touch Controller Setup (Existing Code) ---
+#if defined(TOUCH_GT911_I2C)
+    pinMode(BOARD_TOUCH_INT, INPUT);
+    touch.setPins(-1, BOARD_TOUCH_INT);
+    if (!touch.begin(Wire, GT911_SLAVE_ADDRESS_L, GT911_I2C_CONFIG_SDA_IO_NUM, GT911_I2C_CONFIG_SCL_IO_NUM)) {
+        Serial.println("Failed to find GT911 - check your wiring!");
+    }
+#else
 #if !defined(USE_TFT_eSPI_TOUCH) // Use libraries
     if (!touch.begin()) {
         Serial.println("Touch IC not Started");
         log_i("Touch IC not Started");
     } else log_i("Touch IC Started");
 #endif
+#endif
+
+    bruceConfig.colorInverted = 0;
 }
 
 /***************************************************************************************
@@ -95,12 +129,11 @@ void _post_setup_gpio() {
     }
     tft.setTouch(calData);
 #endif
-    // Brightness disabled for RE:CYD
+
     // Brightness control must be initialized after tft in this case @Pirata
-    /*    pinMode(TFT_BL, OUTPUT);
-        ledcSetup(TFT_BRIGHT_CHANNEL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits); // Channel 0, 10khz, 8bits
-        ledcAttachPin(TFT_BL, TFT_BRIGHT_CHANNEL);
-        ledcWrite(TFT_BRIGHT_CHANNEL, 255);*/
+    pinMode(TFT_BL, OUTPUT);
+    ledcAttach(TFT_BL, TFT_BRIGHT_FREQ, TFT_BRIGHT_Bits);
+    ledcWrite(TFT_BL, 255);
 }
 
 /*********************************************************************
@@ -108,7 +141,7 @@ void _post_setup_gpio() {
 ** location: settings.cpp
 ** set brightness value
 **********************************************************************/
-/*void _setBrightness(uint8_t brightval) {
+void _setBrightness(uint8_t brightval) {
     int dutyCycle;
     if (brightval == 100) dutyCycle = 255;
     else if (brightval == 75) dutyCycle = 130;
@@ -117,9 +150,9 @@ void _post_setup_gpio() {
     else if (brightval == 0) dutyCycle = 0;
     else dutyCycle = ((brightval * 255) / 100);
 
-    log_i("dutyCycle for bright 0-255: %d", dutyCycle);
-    ledcWrite(TFT_BRIGHT_CHANNEL, dutyCycle); // Channel 0
-}*/
+    // log_i("dutyCycle for bright 0-255: %d", dutyCycle);
+    ledcWrite(TFT_BL, dutyCycle);
+}
 
 /*********************************************************************
 ** Function: InputHandler
@@ -146,26 +179,75 @@ void InputHandler(void) {
             PrevPagePress = false;
             touchPoint.pressed = false;
             _IH_touched = false;
+#elif defined(TOUCH_GT911_I2C)
+        static unsigned long tm = millis();
+        TouchPointPro t;
+        uint8_t touched = 0;
+        uint8_t rot = 5;
+
+        if (rot != bruceConfigPins.rotation) {
+            if (bruceConfigPins.rotation == 1) {
+                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
+                touch.setSwapXY(true);
+                touch.setMirrorXY(false, true);
+            }
+            if (bruceConfigPins.rotation == 3) {
+                touch.setMaxCoordinates(TFT_HEIGHT, TFT_WIDTH);
+                touch.setSwapXY(true);
+                touch.setMirrorXY(true, false);
+            }
+            if (bruceConfigPins.rotation == 0) {
+                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
+                touch.setSwapXY(false);
+                touch.setMirrorXY(false, false);
+            }
+            if (bruceConfigPins.rotation == 2) {
+                touch.setMaxCoordinates(TFT_WIDTH, TFT_HEIGHT);
+                touch.setSwapXY(false);
+                touch.setMirrorXY(true, true);
+            }
+            rot = bruceConfigPins.rotation;
+        }
+        // Track touch state to prevent double events on press/release
+        static bool lastTouchState = false;
+        static unsigned long lastTouchTime = 0;
+
+        touched = touch.getPoint(&t.x, &t.y);
+        bool currentTouchState = touched > 0;
+
+        // Only process new touch presses with debouncing
+        if (currentTouchState && !lastTouchState && (millis() - lastTouchTime) > 100) {
+            // This is a genuine new touch press
+            lastTouchTime = millis();
+        } else if (!currentTouchState || lastTouchState) {
+            // Touch release or continuing touch - ignore
+            touched = 0;
+        }
+        lastTouchState = currentTouchState;
+        if (((millis() - tm) > 190 || LongPress) && touched) {
+            tm = millis();
 #else
         if (touch.touched()) {
             auto t = touch.getPointScaled();
 #endif
+#if !defined(TOUCH_GT911_I2C)
             // Serial.printf("\nRAW: Touch Pressed on x=%d, y=%d",t.x, t.y);
-            if (bruceConfig.rotation == 3) {
+            if (bruceConfigPins.rotation == 3) {
                 t.y = (tftHeight + 20) - t.y;
                 t.x = tftWidth - t.x;
             }
-            if (bruceConfig.rotation == 0) {
+            if (bruceConfigPins.rotation == 0) {
                 int tmp = t.x;
                 t.x = tftWidth - t.y;
                 t.y = tmp;
             }
-            if (bruceConfig.rotation == 2) {
+            if (bruceConfigPins.rotation == 2) {
                 int tmp = t.x;
                 t.x = t.y;
                 t.y = (tftHeight + 20) - tmp;
             }
-            // Serial.printf("\nROT: Touch Pressed on x=%d, y=%d\n",t.x, t.y);
+#endif
+            // Serial.printf("\nROT: Touch Pressed on x=%d, y=%d\n", t.x, t.y);
 
             if (!wakeUpScreen()) AnyKeyPress = true;
             else goto END;
@@ -194,6 +276,6 @@ void powerOff() {
 /*********************************************************************
 ** Function: checkReboot
 ** location: mykeyboard.cpp
-** Btn logic to tornoff the device (name is odd btw)
+** Btn logic to turn off the device (name is odd btw)
 **********************************************************************/
 void checkReboot() {}
